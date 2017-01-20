@@ -29,7 +29,7 @@ defmodule HedwigMopidy.Mixfile do
   defp deps do
     [
       {:hedwig, "~> 1.0.0-rc.4"},
-      {:mopidy, github: "labzero/mopdiy"}
+      {:mopidy, github: "labzero/mopidy"}
     ]
   end
 

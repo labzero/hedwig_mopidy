@@ -2,6 +2,6 @@
   "hedwig": {:hex, :hedwig, "1.0.0-rc.4", "7c134a19bec8508f8dfd308c69d37426e7bcb48f41cc0cb9366ad7514bb7fd40", [:mix], [{:gproc, "~> 0.5", [hex: :gproc, optional: false]}]},
   "httpotion": {:hex, :httpotion, "3.0.2", "525b9bfeb592c914a61a8ee31fdde3871e1861dfe805f8ee5f711f9f11a93483", [:mix], [{:ibrowse, "~> 4.2", [hex: :ibrowse, optional: false]}]},
   "ibrowse": {:hex, :ibrowse, "4.2.2", "b32b5bafcc77b7277eff030ed32e1acc3f610c64e9f6aea19822abcadf681b4b", [:rebar3], []},
-  "mopidy": {:hex, :mopidy, "0.3.0", "6d8ece10e4373bc120b908450ac34b27142ada4ac31fed7728ffbd677f0b7cc1", [:mix], [{:httpotion, "~> 3.0.0", [hex: :httpotion, optional: false]}, {:poison, "~> 2.1", [hex: :poison, optional: false]}]},
-  "poison": {:hex, :poison, "3.0.0", "625ebd64d33ae2e65201c2c14d6c85c27cc8b68f2d0dd37828fde9c6920dd131", [:mix], []},
+  "mopidy": {:git, "https://github.com/labzero/mopidy.git", "2bc5f13dd40a437358c740ac38752be7e94285b9", []},
+  "poison": {:hex, :poison, "3.1.0", "d9eb636610e096f86f25d9a46f35a9facac35609a7591b3be3326e99a0484665", [:mix], []},
   "socket": {:hex, :socket, "0.3.6", "12e115260ee48646751a16a3e98a4b1594c94d346894a8087b94bf5c7e59e6b2", [:mix], []}}
