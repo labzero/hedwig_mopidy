@@ -1,33 +1,209 @@
 defmodule HedwigMopidy.Responders.Mopidy do
   use Hedwig.Responder
 
-  alias Mopidy.{Library,Tracklist,Playback}
-  alias Mopidy.{Track,TlTrack,SearchResult}
+  alias Mopidy.{Library,Tracklist,Playback,Playlists,Playlist}
+  alias Mopidy.{Track,TlTrack,SearchResult,Ref}
 
-  hear ~r/^mopidy$/i, message do
-    response = "Hedwig Mopidy\n"
-    
-    response =
-      if web_url = HedwigMopidy.web_url do
-        response <> "Web URL: " <> web_url <> "\n"
-      else
-        response <> "Web URL: No web URL set\n"
-      end
-
-    response =
-      if icecast_url = HedwigMopidy.icecast_url do
-        response <> "Icecast URL: " <> icecast_url <> "\n"
-      else
-        response
-      end
-
-    send message, HedwigMopidy.playing_message(response)
+  defmodule Thumb do
+    defstruct [:user, :track, :playlist, :direction, :timestamp]
   end
 
-  hear ~r/play artist (?<artist>.*)/i, message do
+  defmodule ThumbStore do
+    defp brain do
+      HedwigBrain.brain
+    end
+
+    defp storage do
+      brain.get_lobe("thumbs")
+    end
+
+    def store(%Thumb{} = data, name) do
+      brain.put(storage, name, data)
+      data
+    end
+
+    def retrieve(name) do
+      case brain.get(storage, canonicalize(name)) do
+        nil -> %Thumb{}
+        data -> data
+      end
+    end
+
+    def all do
+      brain.all(storage)
+    end
+
+    def canonicalize(string) do
+      string
+      |> String.downcase
+      |> String.trim
+    end
+  end
+
+  defmodule CurrentPlaylistStore do
+    defp brain do
+      HedwigBrain.brain
+    end
+
+    defp storage do
+      brain.get_lobe("playlist")
+    end
+
+    def store(%Playlist{} = playlist) do
+      brain.put(storage, "current_playlist", playlist)
+      playlist
+    end
+
+    def retrieve do
+      case brain.get(storage, "current_playlist") do
+        nil -> %Playlist{name: "any playlist"}
+        playlist -> playlist
+      end
+    end
+
+    def all do
+      brain.all(storage)
+    end
+  end
+
+  @usage """
+
+`dj` displays this message
+`dj playlists` lists all the available playlists
+`dj start <uri>` shuffles the playlist specified by <uri> (defaults to the Lab Zero playlist)
+`dj pause|stop` ceases playback
+`dj play|resume` starts playback
+`dj (what|who) ('s| is) playing` displays the currently playing track and playlist (e.g. what's playing or who is playing)
+`dj +1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes` upvotes if you like the currently playing track on the currently playing playlist
+`dj -1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next` votes against the currently playing track on the currently playing playlist and skips to the next track
+  """
+
+  respond ~r/dj$/i, message do
+    send message, @usage
+  end
+
+  respond ~r/dj playlists$/i, message do
+    response =
+      with {:ok, playlists} <- Playlists.as_list do
+        Enum.map_join(playlists, "\n", fn r -> "#{r.name}: #{r.uri}" end)
+      end
+    send message, response
+  end
+
+  respond ~r/dj\sstart(?:\s(?<playlist>.*)\s*)?/i, message do
+    arg = String.strip(message.matches["playlist"])
+    playlist =
+      if arg == "" do
+        previous_playlist = CurrentPlaylistStore.retrieve
+        if previous_playlist.uri == nil do
+          with {:ok, playlist} <- Playlists.lookup("spotify:user:1241621489:playlist:6MefnARMuplYzfgUgXlfAG") do
+            playlist
+          end
+        else
+          previous_playlist
+        end
+      else
+        with {:ok, playlist} <- Playlists.lookup(arg) do
+          playlist
+        end
+      end
+    response =
+      with  {:ok, :success} <- Tracklist.clear,
+            {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),
+            {:ok, tracks} when is_list(tracks) <- Tracklist.add(playlist_refs |> Enum.map(fn(%Ref{} = r) -> r.uri end)),
+            {:ok, :success} <- Tracklist.set_random(true),
+            {:ok, :success} <- Playback.play do
+        CurrentPlaylistStore.store(playlist)
+        "Shuffling #{playlist.name}"
+      else
+        {:error, error_message} -> error_message
+        _ ->
+          case Tracklist.get_length do
+            {:ok, 0} -> HedwigMopidy.error_message("Could find any music on the playlist")
+            _        -> HedwigMopidy.error_message("Couldn't find the playlist")
+          end
+      end
+    send message, response
+  end
+
+  respond ~r/dj (pause|stop)$/i, message do
+    response =
+      with {:ok, :success} <- Playback.pause,
+           {:ok, state} <- Playback.get_state,
+           {:ok, current_track} <- Playback.get_current_track do
+        case state do
+          "playing" -> HedwigMopidy.playing_string(current_track, CurrentPlaylistStore.retrieve)
+          "stopped" -> HedwigMopidy.notice_message("Stopped")
+          "paused"  -> HedwigMopidy.notice_message("Paused " <> HedwigMopidy.track_string(current_track))
+          _ -> HedwigMopidy.error_message("Couldn't pause music")
+        end
+      else
+        {:error, error_message} -> error_message
+        _ -> HedwigMopidy.error_message("Couldn't pause music")
+      end
+    send message, response
+  end
+
+  respond ~r/dj (play|resume)$/i, message do
+    response =
+      with {:ok, :success} <- Playback.play do
+        HedwigMopidy.playing_string(HedwigMopidy.currently_playing, CurrentPlaylistStore.retrieve)
+      else
+        {:error, error_message} -> error_message
+        _ -> HedwigMopidy.error_message("Couldn't play music")
+      end
+    send message, response
+  end
+
+  respond ~r/dj (what|who).* playing/i, message do
+    send message, HedwigMopidy.playing_string(HedwigMopidy.currently_playing, CurrentPlaylistStore.retrieve)
+  end
+
+  respond ~r/dj\s(\+1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes)$/i, message do
+    currently_playing = HedwigMopidy.currently_playing
+    current_playlist = CurrentPlaylistStore.retrieve
+    response =
+      with {:ok, "playing"} <- Playback.get_state do
+        user = HedwigMopidy.user(message)
+        ThumbStore.store(%Thumb{user: user,
+                                track: currently_playing,
+                                playlist: current_playlist,
+                                direction: 1,
+                                timestamp: :calendar.universal_time()},
+                                "#{user}|#{currently_playing.uri}|#{current_playlist.uri}")
+        HedwigMopidy.notice_message("Recorded your vote for #{HedwigMopidy.playing_string(currently_playing, current_playlist)} — Thanks!")
+      else
+        _ -> HedwigMopidy.notice_message(HedwigMopidy.playing_string(currently_playing, current_playlist))
+      end
+    send message, response
+  end
+
+  respond ~r/dj\s(\-1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next)$/i, message do
+    currently_playing = HedwigMopidy.currently_playing
+    current_playlist = CurrentPlaylistStore.retrieve
+    response =
+      with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
+           {:ok, :success} <- Playback.next do
+        user = HedwigMopidy.user(message)
+        ThumbStore.store(%Thumb{user: user,
+                                track: currently_playing,
+                                playlist: current_playlist,
+                                direction: -1,
+                                timestamp: :calendar.universal_time()},
+                                "#{user}|#{currently_playing.uri}|#{current_playlist.uri}")
+        HedwigMopidy.notice_message("Recorded your vote against #{HedwigMopidy.playing_string(currently_playing, current_playlist)} — Skipping...")
+      else
+        {:error, error_message} -> error_message
+        _ -> HedwigMopidy.notice_message("No more songs are queued")
+      end
+    send message, response
+  end
+
+  #experimental
+  respond ~r/dj\splay\sartist\s(?<artist>.*)/i, message do
     artist = message.matches["artist"]
 
-    response = 
+    response =
       with {:ok, %SearchResult{} = search_results} <- Library.search(%{artist: [artist]}),
            {:ok, :success} <- Tracklist.clear,
            {:ok, tracks} when is_list(tracks) <- Tracklist.add(search_results.tracks |> Enum.map(fn(%Track{} = track) -> track.uri end)),
@@ -41,15 +217,15 @@ defmodule HedwigMopidy.Responders.Mopidy do
             _        -> HedwigMopidy.error_message("Couldn't play music by that artist")
           end
       end
-
     send message, response
   end
 
-  hear ~r/^play album (?<album>.*) by (?<artist>.*)/i, message do
+  #experimental
+  respond ~r/dj\splay\salbum\s(?<album>.*)\sby\s(?<artist>.*)/i, message do
     album = message.matches["album"]
     artist = message.matches["artist"]
 
-    response = 
+    response =
       with {:ok, %SearchResult{} = search_results} <- Library.search(%{artist: [artist], album: [album]}),
            {:ok, :success} <- Tracklist.clear,
            {:ok, tracks} when is_list(tracks) <- Tracklist.add(search_results.tracks |> Enum.map(fn(%Track{} = track) -> track.uri end)),
@@ -67,109 +243,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  # what's playing
-  # who is playing
-  hear ~r/^(what|who).* playing/i, message do
-    response = HedwigMopidy.currently_playing
-
-    send message, response
-  end
-
-  hear ~r/^(up|what).* next$/i, message do
-    response =
-      with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track do
-        next_track
-        |> HedwigMopidy.track_string
-        |> HedwigMopidy.notice_message
-      else
-        {:error, error_message} -> error_message
-        _ -> HedwigMopidy.notice_message("No more songs are queued")
-      end
-
-    send message, response
-  end
-
-  hear ~r/^next (song|track)$/i, message do
-    response =
-      with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
-           {:ok, :success} <- Playback.next do
-        HedwigMopidy.playing_string(next_track)
-      else
-        {:error, error_message} -> error_message
-        _ -> HedwigMopidy.notice_message("No more songs are queued")
-      end
-
-    send message, response
-  end
-
-  hear ~r/^repeat (?<value>.{2,3})$/i, message do
-    {string_value, value} = HedwigMopidy.parse_boolean(message.matches["value"])
-
-    response =
-      with {:ok, :success} <- Tracklist.set_repeat(value) do
-        HedwigMopidy.notice_message("Repeat is " <> string_value)
-      else
-        {:error, error_message} -> error_message
-        _ -> HedwigMopidy.error_message("Couldn't set repeat")
-      end
-
-    send message, response
-  end
-
-  hear ~r/^random (?<value>.{2,3})$/i, message do
-    {string_value, value} = HedwigMopidy.parse_boolean(message.matches["value"])
-
-    response =
-      with {:ok, :success} <- Tracklist.set_random(value) do
-        HedwigMopidy.notice_message("Random is " <> string_value)
-      else
-        {:error, error_message} -> error_message
-        _ -> HedwigMopidy.error_message("Couldn't set random")
-      end
-
-    send message, response
-  end
-
-  hear ~r/^play$/i, message do
-    response = 
-      with {:ok, :success} <- Playback.play do
-        HedwigMopidy.currently_playing
-      else
-        {:error, error_message} -> error_message
-        _ -> HedwigMopidy.error_message("Couldn't play music")
-      end
-
-    send message, response
-  end
-
-  hear ~r/^stop$/i, message do
-    response = 
-      with {:ok, :success} <- Playback.stop do
-        HedwigMopidy.notice_message("Stopped")
-      else
-        {:error, error_message} -> error_message
-        _ -> HedwigMopidy.error_message("Couldn't stop music")
-      end
-
-    send message, response
-  end
-
-  hear ~r/^pause$/i, message do
-    response = 
-      with {:ok, :success} <- Playback.pause,
-           {:ok, state} <- Playback.get_state,
-           {:ok, current_track} <- Playback.get_current_track do
-        case state do
-          "playing" -> HedwigMopidy.playing_string(current_track)
-          "stopped" -> HedwigMopidy.notice_message("Stopped")
-          "paused"  -> HedwigMopidy.notice_message("Paused on " <> HedwigMopidy.track_string(current_track))
-          _ -> HedwigMopidy.error_message("Couldn't pause music")
-        end
-      else
-        {:error, error_message} -> error_message
-        _ -> HedwigMopidy.error_message("Couldn't pause music")
-      end
-
-    send message, response
+  def terminate(reason, state) do
+    #no-op
   end
 end

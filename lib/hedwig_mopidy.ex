@@ -1,7 +1,7 @@
 defmodule HedwigMopidy do
   use Application
 
-  alias Mopidy.{Track,TlTrack,Playback}
+  alias Mopidy.{Track,TlTrack,Playback,Playlists,Playlist}
 
   def start(_type, _args) do
     import Supervisor.Spec, warn: false
@@ -13,9 +13,9 @@ defmodule HedwigMopidy do
   def currently_playing do
     with {:ok, "playing"} <- Playback.get_state,
          {:ok, %Track{} = current_track} <- Playback.get_current_track do
-      playing_string(current_track)
+      current_track
     else
-      {:ok, _} -> notice_message("Nothing is playing")
+      {:ok, _} -> %Track{}
       {:error, error_message} -> error_message
       _ -> error_message("Couldn't find what's playing")
     end
@@ -28,15 +28,19 @@ defmodule HedwigMopidy do
   def notice_message(message), do: "♮ " <> to_string(message)
   def error_message(message), do: "✗ " <> to_string(message)
 
-  def playing_string(%Track{} = track) do
-    playing_message("Playing " <> HedwigMopidy.track_string(track))
+  def playing_string(%Track{} = track, %Playlist{} = playlist) do
+    playing_message("#{HedwigMopidy.track_string(track)} on #{playlist.name}")
   end
-  def playing_string(%TlTrack{} = tl_track) do
-    playing_string(tl_track.track)
+  def playing_string(%TlTrack{} = tl_track, %Playlist{} = playlist) do
+    playing_string(tl_track.track, playlist)
   end
 
   def track_string(%Track{} = track) do
-    track.name <> " by " <> artists_string(track.artists)
+    if track.uri do
+      "#{track.name} by #{artists_string(track.artists)}"
+    else
+      "Nothing is playing"
+    end
   end
   def track_string(%TlTrack{} = tl_track) do
     track_string(tl_track.track)
@@ -65,5 +69,9 @@ defmodule HedwigMopidy do
   """
   def icecast_url do
     Application.get_env(:hedwig_mopidy, :icecast_url)
+  end
+
+  def user(message) do
+    if is_map(message.user) do message.user.name else message.user end
   end
 end
