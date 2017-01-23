@@ -78,11 +78,11 @@ defmodule HedwigMopidy.Responders.Mopidy do
 `dj -1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next` votes against the currently playing track on the currently playing playlist and skips to the next track
   """
 
-  respond ~r/dj$/i, message do
+  hear ~r/^dj$/i, message do
     send message, @usage
   end
 
-  respond ~r/dj playlists$/i, message do
+  hear ~r/^dj\splaylists$/i, message do
     response =
       with {:ok, playlists} <- Playlists.as_list do
         Enum.map_join(playlists, "\n", fn r -> "#{r.name}: #{r.uri}" end)
@@ -90,7 +90,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  respond ~r/dj\sstart(?:\s(?<playlist>.*)\s*)?/i, message do
+  hear ~r/^dj\sstart(?:\s(?<playlist>.*)\s*)?/i, message do
     arg = String.strip(message.matches["playlist"])
     playlist =
       if arg == "" do
@@ -126,7 +126,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  respond ~r/dj (pause|stop)$/i, message do
+  hear ~r/^dj\s(pause|stop)$/i, message do
     response =
       with {:ok, :success} <- Playback.pause,
            {:ok, state} <- Playback.get_state,
@@ -144,7 +144,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  respond ~r/dj (play|resume)$/i, message do
+  hear ~r/^dj\s(play|resume)$/i, message do
     response =
       with {:ok, :success} <- Playback.play do
         HedwigMopidy.playing_string(HedwigMopidy.currently_playing, CurrentPlaylistStore.retrieve)
@@ -155,11 +155,11 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  respond ~r/dj (what|who).* playing/i, message do
+  hear ~r/^dj\s(what|who).*\splaying/i, message do
     send message, HedwigMopidy.playing_string(HedwigMopidy.currently_playing, CurrentPlaylistStore.retrieve)
   end
 
-  respond ~r/dj\s(\+1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes)$/i, message do
+  hear ~r/^dj\s(\+1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes)$/i, message do
     currently_playing = HedwigMopidy.currently_playing
     current_playlist = CurrentPlaylistStore.retrieve
     response =
@@ -170,7 +170,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
                                 playlist: current_playlist,
                                 direction: 1,
                                 timestamp: :calendar.universal_time()},
-                                "#{user}|#{currently_playing.uri}|#{current_playlist.uri}")
+                        "#{user}|#{currently_playing.uri}|#{current_playlist.uri}")
         HedwigMopidy.notice_message("Recorded your vote for #{HedwigMopidy.playing_string(currently_playing, current_playlist)} — Thanks!")
       else
         _ -> HedwigMopidy.notice_message(HedwigMopidy.playing_string(currently_playing, current_playlist))
@@ -178,7 +178,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  respond ~r/dj\s(\-1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next)$/i, message do
+  hear ~r/^dj\s(\-1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next)$/i, message do
     currently_playing = HedwigMopidy.currently_playing
     current_playlist = CurrentPlaylistStore.retrieve
     response =
@@ -190,7 +190,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
                                 playlist: current_playlist,
                                 direction: -1,
                                 timestamp: :calendar.universal_time()},
-                                "#{user}|#{currently_playing.uri}|#{current_playlist.uri}")
+                        "#{user}|#{currently_playing.uri}|#{current_playlist.uri}")
         HedwigMopidy.notice_message("Recorded your vote against #{HedwigMopidy.playing_string(currently_playing, current_playlist)} — Skipping...")
       else
         {:error, error_message} -> error_message
@@ -200,7 +200,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
   end
 
   #experimental
-  respond ~r/dj\splay\sartist\s(?<artist>.*)/i, message do
+  hear ~r/^dj\splay\sartist\s(?<artist>.*)$/i, message do
     artist = message.matches["artist"]
 
     response =
@@ -221,7 +221,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
   end
 
   #experimental
-  respond ~r/dj\splay\salbum\s(?<album>.*)\sby\s(?<artist>.*)/i, message do
+  hear ~r/^dj\splay\salbum\s(?<album>.*)\sby\s(?<artist>.*)$/i, message do
     album = message.matches["album"]
     artist = message.matches["artist"]
 
