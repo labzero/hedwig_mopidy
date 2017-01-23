@@ -78,6 +78,10 @@ defmodule HedwigMopidy.Responders.Mopidy do
 `dj -1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next` votes against the currently playing track on the currently playing playlist and skips to the next track
   """
 
+  hear ~r/testing/i, message do
+    send message, message
+  end
+
   hear ~r/^dj$/i, message do
     send message, @usage
   end
