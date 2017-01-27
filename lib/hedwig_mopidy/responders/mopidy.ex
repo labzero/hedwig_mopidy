@@ -94,7 +94,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj\sstart(?:\s(?<playlist>.*)\s*)?/i, message do
+  hear ~r/^dj\sstart(?:\s\<(?<playlist>.*)\>\s*)?/i, message do
     arg = String.strip(message.matches["playlist"])
     playlist =
       if arg == "" do
