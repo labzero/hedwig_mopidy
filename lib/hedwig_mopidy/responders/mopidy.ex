@@ -68,7 +68,6 @@ defmodule HedwigMopidy.Responders.Mopidy do
 
   @usage """
 
-`dj` displays this message
 `dj playlists` lists all the available playlists
 `dj start <uri>` shuffles the playlist specified by <uri> (defaults to the Lab Zero playlist)
 `dj pause|stop` ceases playback
@@ -77,14 +76,6 @@ defmodule HedwigMopidy.Responders.Mopidy do
 `dj +1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes` upvotes if you like the currently playing track on the currently playing playlist
 `dj -1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next` votes against the currently playing track on the currently playing playlist and skips to the next track
   """
-
-  hear ~r/testing/i, message do
-    send message, message
-  end
-
-  hear ~r/^dj$/i, message do
-    send message, @usage
-  end
 
   hear ~r/^dj\splaylists$/i, message do
     response =
