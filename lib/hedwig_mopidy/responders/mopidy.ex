@@ -91,7 +91,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
       if arg == "" do
         previous_playlist = CurrentPlaylistStore.retrieve
         if previous_playlist.uri == nil do
-          with {:ok, playlist} <- Playlists.lookup("spotify:user:1241621489:playlist:6MefnARMuplYzfgUgXlfAG") do
+          with {:ok, playlist} <- Playlists.lookup("spotify:user:1241621489:playlist:3XnjVBxdNxNQCMtXR68qMp") do
             playlist
           end
         else
