@@ -102,10 +102,11 @@ defmodule HedwigMopidy.Responders.Mopidy do
           playlist
         end
       end
+    send message, "Working on it.."      
     response =
       with  {:ok, :success} <- Tracklist.clear,
-            {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),
-            {:ok, tracks} when is_list(tracks) <- Tracklist.add(playlist_refs |> Enum.map(fn(%Ref{} = r) -> r.uri end)),
+            {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),            
+            {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(playlist_refs),            
             {:ok, :success} <- Tracklist.set_random(true),
             {:ok, :success} <- Playback.play do
         CurrentPlaylistStore.store(playlist)
@@ -236,6 +237,13 @@ defmodule HedwigMopidy.Responders.Mopidy do
       end
 
     send message, response
+  end
+
+  def add_tracks_in_batches(tracks, batch_size \\ 100) do
+    tracks
+    |> Enum.chunk(batch_size, batch_size, [])
+    |> Enum.each(fn batch -> Tracklist.add(batch |> Enum.map(fn(%Ref{} = r) -> r.uri end)) end)
+    {:ok, tracks}
   end
 
   def terminate(reason, state) do
