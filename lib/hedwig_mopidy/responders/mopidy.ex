@@ -1,7 +1,7 @@
 defmodule HedwigMopidy.Responders.Mopidy do
   use Hedwig.Responder
 
-  alias Mopidy.{Library,Tracklist,Playback,Playlists,Playlist}
+  alias Mopidy.{Library,Tracklist,Playback,Playlists,Playlist,Mixer}
   alias Mopidy.{Track,TlTrack,SearchResult,Ref}
 
   defmodule Thumb do
@@ -75,6 +75,10 @@ defmodule HedwigMopidy.Responders.Mopidy do
 `dj (what|who) ('s| is) playing` displays the currently playing track and playlist (e.g. what's playing or who is playing)
 `dj +1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes` upvotes if you like the currently playing track on the currently playing playlist
 `dj -1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next` votes against the currently playing track on the currently playing playlist and skips to the next track
+`dj volume` replies with the current volume level (0-10)
+`dj volume up|more|moar|+|++|+1` increases the volume by 1 level
+`dj volume down|less|-|--|-1` decreases the volume by 1 level
+`dj crank it` increases the volume by 3 levels
   """
 
   hear ~r/^dj\splaylists$/i, message do
@@ -102,11 +106,11 @@ defmodule HedwigMopidy.Responders.Mopidy do
           playlist
         end
       end
-    send message, "Working on it.."      
+    send message, "Working on it.."
     response =
       with  {:ok, :success} <- Tracklist.clear,
-            {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),            
-            {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(playlist_refs),            
+            {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),
+            {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(playlist_refs),
             {:ok, :success} <- Tracklist.set_random(true),
             {:ok, :success} <- Playback.play do
         CurrentPlaylistStore.store(playlist)
@@ -193,6 +197,40 @@ defmodule HedwigMopidy.Responders.Mopidy do
         _ -> HedwigMopidy.notice_message("No more songs are queued")
       end
     send message, response
+  end
+
+  hear ~r/^dj\svolume$/i, message do
+    response = with {:ok, level} <- Mixer.get_volume do
+      "The volume level is set to #{round(level/10)}"
+    end
+    send message, response
+  end
+
+  hear ~r/^dj\svolume\s(?<level>.*)$/i, message do
+    level = String.downcase(message.matches["level"])
+    response = cond do
+      Enum.member?(["up", "more", "moar", "+", "++", "+1"], level) -> change_volume("1", false)
+      Enum.member?(["down", "less", "-", "--", "-1"], level) -> change_volume("-1", false)
+      true -> change_volume(message.matches["level"])
+    end
+    send message, response
+  end
+
+  hear ~r/^dj\scrank\sit.*$/i, message do
+    send message, change_volume("3", false)
+  end
+
+  def bound_volume(level) do
+    max(min(level, 10), 0)
+  end
+
+  def change_volume(new_level, absolutely \\ true) do
+    with {new_level, _remainder} <- Integer.parse(new_level),
+         {:ok, existing_level} <- Mixer.get_volume,
+         {:ok, true} <- Mixer.set_volume(bound_volume(new_level = if (absolutely), do: new_level, else: new_level + round(existing_level/10)) * 10),
+         {:ok, new_level} <- Mixer.get_volume do
+      "Changed the volume from #{round(existing_level/10)} to #{round(new_level/10)}"
+    end
   end
 
   #experimental
