@@ -4,9 +4,9 @@ RestartSec=5
 TimeoutStopSec=10
 User=pi
 WorkingDirectory=/home/pi
-ExecStart=/usr/bin/ssh -i ./.ssh/jenkins-ecs.pem -N -R 6680:localhost:6680 ubuntu@ec2-54-202-189-109.us-west-2.compute.amazonaws.com
-After=network-online.target dhcpcd.service
+ExecStart=/usr/bin/ssh -i ./.ssh/jenkins-ecs.pem -o ServerAliveInterval=30 -N -R 6680:localhost:6680 ubuntu@ec2-54-202-189-109.us-west-2.compute.amazonaws.com
 [Unit]
 Description=SSH tunnel for mopidy/clippy
+After=network-online.target dhcpcd.service
 [Install]
 WantedBy=network-online.target dhcpcd.service
