@@ -56,7 +56,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
 
     def retrieve do
       case brain.get(storage, "current_playlist") do
-        nil -> %Playlist{name: "any playlist"}
+        {:ok, playlist} -> playlist
         playlist -> playlist
       end
     end
@@ -69,12 +69,15 @@ defmodule HedwigMopidy.Responders.Mopidy do
   @usage """
 
 `dj playlists` lists all the available playlists
-`dj start <uri>` shuffles the playlist specified by <uri> (defaults to the Lab Zero playlist)
+`dj start` shuffles the last-played playlist, or Lab Zero default playlist
+`dj start <uri>` shuffles a publicly-available playlist
 `dj pause|stop` ceases playback
 `dj play|resume` starts playback
-`dj (what|who) ('s| is) playing` displays the currently playing track and playlist (e.g. what's playing or who is playing)
-`dj +1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes` upvotes if you like the currently playing track on the currently playing playlist
-`dj -1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next` votes against the currently playing track on the currently playing playlist and skips to the next track
+`dj who's playing` or what's playing, shows current track and playlist
+`dj who's next` or what's next, shows upcoming track and playlist
+`dj +1|up|yes` upvotes the currently playing track
+`dj -1|down|no` downvotes the currently playing track and skips to the next
+`dj skip|next` skips to the next track without the fanfare
 `dj volume` replies with the current volume level (0-10)
 `dj volume up|more|moar|+|++|+1` increases the volume by 1 level
 `dj volume down|less|-|--|-1` decreases the volume by 1 level
@@ -91,22 +94,29 @@ defmodule HedwigMopidy.Responders.Mopidy do
 
   hear ~r/^dj\sstart(?:\s\<(?<playlist>.*)\>\s*)?/i, message do
     arg = String.strip(message.matches["playlist"])
-    playlist =
-      if arg == "" do
-        previous_playlist = CurrentPlaylistStore.retrieve
-        if previous_playlist.uri == nil do
-          with {:ok, playlist} <- Playlists.lookup("spotify:user:1241621489:playlist:3XnjVBxdNxNQCMtXR68qMp") do
-            playlist
-          end
-        else
-          previous_playlist
-        end
-      else
-        with {:ok, playlist} <- Playlists.lookup(arg) do
-          playlist
-        end
-      end
-    send message, "Working on it.."
+
+    playlist = case arg do
+      "" -> last_playlist()
+      _ -> Playlists.lookup(arg)
+    end
+
+    case playlist do
+      {:ok, nil} -> send message, "Couldn't find that playlist"
+      {:ok, playlist} -> start_playlist(message, playlist)
+      {:error, err} -> send message, "Couldn't load playlist, `#{err}`"
+    end
+  end
+
+  def last_playlist() do
+    previous_playlist = CurrentPlaylistStore.retrieve
+    case previous_playlist do
+      nil -> Playlists.lookup("spotify:user:1241621489:playlist:3XnjVBxdNxNQCMtXR68qMp")
+        _ -> {:ok, previous_playlist}
+    end
+  end
+
+  def start_playlist(message, playlist) do
+    send message, "Loading playlist.."
     response =
       with  {:ok, :success} <- Tracklist.clear,
             {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),
@@ -116,7 +126,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
         CurrentPlaylistStore.store(playlist)
         "Shuffling #{playlist.name}"
       else
-        {:error, error_message} -> error_message
+        {:error, error_message} -> "Received an error from Mopidy: `#{error_message}`"
         _ ->
           case Tracklist.get_length do
             {:ok, 0} -> HedwigMopidy.error_message("Could find any music on the playlist")
@@ -155,11 +165,11 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj\s(what|who).*\splaying/i, message do
+  hear ~r/^dj (what|who)(['\x{2019}]?s| is) (playing|this( (crap|shit|garbage|noise|lovely music))?)$/iu, message do
     send message, HedwigMopidy.playing_string(HedwigMopidy.currently_playing, CurrentPlaylistStore.retrieve)
   end
 
-  hear ~r/^dj\s(\+1|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes)$/i, message do
+  hear ~r/^dj\s(\+1|:+1:|:thumbsup:|:thumbsup_all:|:metal:|:shaka:|up|yes)$/i, message do
     currently_playing = HedwigMopidy.currently_playing
     current_playlist = CurrentPlaylistStore.retrieve
     response =
@@ -178,7 +188,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj\s(\-1|:thumbsdown:|:thumbsdown_all:|down|no|skip|next)$/i, message do
+  hear ~r/^dj\s(\-1|:-1:|:thumbsdown:|:thumbsdown_all:|down|no)$/i, message do
     currently_playing = HedwigMopidy.currently_playing
     current_playlist = CurrentPlaylistStore.retrieve
     response =
@@ -199,14 +209,40 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj\svolume$/i, message do
+  hear ~r/^dj\s(skip|next)$/i, message do
+    currently_playing = HedwigMopidy.currently_playing
+    current_playlist = CurrentPlaylistStore.retrieve
+    response =
+      with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
+           {:ok, :success} <- Playback.next do
+            HedwigMopidy.notice_message("Skipping to next track: #{HedwigMopidy.playing_string(next_track, current_playlist)}")
+      else
+        {:error, error_message} -> error_message
+        _ -> HedwigMopidy.notice_message("No more songs are queued")
+      end
+    send message, response
+  end
+
+  hear ~r/^dj\s(what|who)['\x{2019}]?s (next|up next|on deck|downstream)$/iu, message do
+    current_playlist = CurrentPlaylistStore.retrieve
+    response =
+      with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track do
+        HedwigMopidy.notice_message("Up next: #{HedwigMopidy.playing_string(next_track, current_playlist)}")
+      else
+        {:error, error_message} -> error_message
+        _ -> HedwigMopidy.notice_message("No more songs are queued")
+      end
+    send message, response
+  end
+
+  hear ~r/^dj\svol(ume)?$/i, message do
     response = with {:ok, level} <- Mixer.get_volume do
       "The volume level is set to #{round(level/10)}"
     end
     send message, response
   end
 
-  hear ~r/^dj\svolume\s(?<level>.*)$/i, message do
+  hear ~r/^dj\svol(ume)?\s(?<level>.*)$/i, message do
     level = String.downcase(message.matches["level"])
     response = cond do
       Enum.member?(["up", "more", "moar", "+", "++", "+1"], level) -> change_volume("1", false)
