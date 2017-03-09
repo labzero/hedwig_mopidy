@@ -76,7 +76,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
 `dj who's playing` or what's playing, shows current track and playlist
 `dj who's next` or what's next, shows upcoming track and playlist
 `dj +1|up|yes` upvotes the currently playing track
-`dj -1|down|no` downvotes the currently playing track and skips to the next
+`dj -1|down|no|gong` downvotes the currently playing track and skips to the next
 `dj skip|next` skips to the next track without the fanfare
 `dj volume` replies with the current volume level (0-10)
 `dj volume up|more|moar|+|++|+1` increases the volume by 1 level
@@ -116,7 +116,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
   end
 
   def start_playlist(message, playlist) do
-    send message, "Loading playlist.."
+    send message, "Loading playlist..."
     response =
       with  {:ok, :success} <- Tracklist.clear,
             {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),
@@ -188,7 +188,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj\s(\-1|:-1:|:thumbsdown:|:thumbsdown_all:|down|no)$/i, message do
+  hear ~r/^dj\s(\-1|:-1:|:thumbsdown:|:thumbsdown_all:|down|no|gong)$/i, message do
     currently_playing = HedwigMopidy.currently_playing
     current_playlist = CurrentPlaylistStore.retrieve
     response =
