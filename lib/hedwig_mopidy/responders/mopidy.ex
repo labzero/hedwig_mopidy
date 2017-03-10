@@ -73,8 +73,8 @@ defmodule HedwigMopidy.Responders.Mopidy do
 `dj start <uri>` shuffles a publicly-available playlist
 `dj pause|stop` ceases playback
 `dj play|resume` starts playback
-`dj who's playing` or what's playing, shows current track and playlist
-`dj who's next` or what's next, shows upcoming track and playlist
+`dj ?` or `who's playing` or `what's playing`, shows current track and playlist
+`dj who's next` or `what's next`, shows upcoming track and playlist
 `dj +1|up|yes` upvotes the currently playing track
 `dj -1|down|no|gong` downvotes the currently playing track and skips to the next
 `dj skip|next` skips to the next track without the fanfare
@@ -165,7 +165,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj (what|who)(['\x{2019}]?s| is) (playing|this( (crap|shit|garbage|noise|lovely music))?)$/iu, message do
+  hear ~r/^dj (\?|(what|who)(['\x{2019}]?s| is) (playing|this( (crap|shit|garbage|noise|lovely music))?))$/iu, message do
     send message, HedwigMopidy.playing_string(HedwigMopidy.currently_playing, CurrentPlaylistStore.retrieve)
   end
 
