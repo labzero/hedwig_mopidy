@@ -165,7 +165,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj (\?|(what|who)(['\x{2019}]?s| is) (playing|this( (crap|shit|garbage|noise|lovely music))?))$/iu, message do
+  hear ~r/^dj (\?|(what|who)(['\x{2019}]?s| is) (playing|this( (crap|shit|garbage|noise|lovely music)))\??)$/iu, message do
     send message, HedwigMopidy.playing_string(HedwigMopidy.currently_playing, CurrentPlaylistStore.retrieve)
   end
 
