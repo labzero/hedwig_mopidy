@@ -20,7 +20,8 @@ defmodule HedwigMopidy.Mixfile do
       applications: [
         :hedwig,
         :logger,
-        :mopidy
+        :mopidy,
+        :httpoison
       ],
       mod: {HedwigMopidy, []}
     ]
@@ -29,7 +30,8 @@ defmodule HedwigMopidy.Mixfile do
   defp deps do
     [
       {:hedwig, "~> 1.0.0-rc.4"},
-      {:mopidy, github: "labzero/mopidy"}
+      {:mopidy, github: "labzero/mopidy"},
+      {:httpoison, "~> 0.10.0"}
     ]
   end
 

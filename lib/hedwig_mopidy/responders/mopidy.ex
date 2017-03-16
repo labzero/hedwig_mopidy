@@ -3,6 +3,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
 
   alias Mopidy.{Library,Tracklist,Playback,Playlists,Playlist,Mixer}
   alias Mopidy.{Track,TlTrack,SearchResult,Ref}
+  alias HedwigMopidy.Spotify
 
   defmodule Thumb do
     defstruct [:user, :track, :playlist, :direction, :timestamp]
@@ -31,6 +32,35 @@ defmodule HedwigMopidy.Responders.Mopidy do
 
     def all do
       brain.all(storage)
+    end
+
+    def increment(name) do
+      name = canonicalize(name)
+      count = case brain.get(storage, name) do
+        nil -> 0
+        data -> data
+      end
+      count = count + 1
+      brain.put(storage, name, count)
+      count
+    end
+
+    def decrement(name) do
+      name = canonicalize(name)
+      count = case brain.get(storage, name) do
+        nil -> 0
+        data -> data
+      end
+      count = count - 1
+      brain.put(storage, name, count)
+      count
+    end
+
+    def count(name) do
+      case brain.get(storage, canonicalize(name)) do
+        nil -> 0
+        data -> data
+      end
     end
 
     def canonicalize(string) do
@@ -110,7 +140,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
   def last_playlist() do
     previous_playlist = CurrentPlaylistStore.retrieve
     case previous_playlist do
-      nil -> Playlists.lookup("spotify:user:1241621489:playlist:3XnjVBxdNxNQCMtXR68qMp")
+      nil -> Playlists.lookup(HedwigMopidy.default_playlist)
         _ -> {:ok, previous_playlist}
     end
   end
@@ -122,9 +152,9 @@ defmodule HedwigMopidy.Responders.Mopidy do
             {:ok, playlist_refs} <- Playlists.get_items(playlist.uri),
             {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(playlist_refs),
             {:ok, :success} <- Tracklist.set_random(true),
+            {:ok, :success} <- Tracklist.set_consume(true), #removes songs from the tracklist after they're played
             {:ok, :success} <- Playback.play do
-        CurrentPlaylistStore.store(playlist)
-        "Shuffling #{playlist.name}"
+        "Shuffling #{CurrentPlaylistStore.store(playlist).name}"
       else
         {:error, error_message} -> "Received an error from Mopidy: `#{error_message}`"
         _ ->
@@ -175,6 +205,10 @@ defmodule HedwigMopidy.Responders.Mopidy do
     response =
       with {:ok, "playing"} <- Playback.get_state do
         user = HedwigMopidy.user(message)
+        if ThumbStore.increment("#{currently_playing.uri}|#{current_playlist.uri}") > 2 do
+          HedwigMopidy.Spotify.remove_track_from_playlist(HedwigMopidy.favorites_playlist, currently_playing.uri)
+          HedwigMopidy.Spotify.add_track_to_playlist(HedwigMopidy.favorites_playlist, currently_playing.uri)
+        end
         ThumbStore.store(%Thumb{user: user,
                                 track: currently_playing,
                                 playlist: current_playlist,
@@ -195,6 +229,9 @@ defmodule HedwigMopidy.Responders.Mopidy do
       with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
            {:ok, :success} <- Playback.next do
         user = HedwigMopidy.user(message)
+        if ThumbStore.decrement("#{currently_playing.uri}|#{current_playlist.uri}") < -2 do
+          HedwigMopidy.Spotify.remove_track_from_playlist(current_playlist.uri, currently_playing.uri)
+        end
         ThumbStore.store(%Thumb{user: user,
                                 track: currently_playing,
                                 playlist: current_playlist,
@@ -223,7 +260,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     send message, response
   end
 
-  hear ~r/^dj\s(what|who)['\x{2019}]?s (next|up next|on deck|downstream)$/iu, message do
+  hear ~r/^dj\s(what|who)['\x{2019}]?s (next|up next|on deck|downstream)\??$/iu, message do
     current_playlist = CurrentPlaylistStore.retrieve
     response =
       with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track do

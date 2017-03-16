@@ -74,4 +74,58 @@ defmodule HedwigMopidy do
   def user(message) do
     if is_map(message.user) do message.user.name else message.user end
   end
+
+  def default_playlist do
+    Application.get_env(:hedwig_mopidy, :default_playlist) || "spotify:user:labzeroinnovations:playlist:64mMWs2NiiguFZWtODm6Jh"
+  end
+
+  def favorites_playlist do
+    Application.get_env(:hedwig_mopidy, :favorites_playlist) || "spotify:user:labzeroinnovations:playlist:00l7ibuNDlOGRvfReyaUge"
+  end
+
+  defmodule Spotify do
+    def get_token do
+      {:ok, response} = HTTPoison.post("https://accounts.spotify.com/api/token",
+                                       "grant_type=refresh_token&refresh_token=#{get_refresh_token}",
+                                       ["Authorization": "Basic #{:base64.encode(get_secrets)}",
+                                        "Content-Type": "application/x-www-form-urlencoded"],
+                                       hackney: [pool: :tracklist])
+      Poison.decode!(response.body)["access_token"]
+    end
+
+    def add_track_to_playlist(playlist_uri, track_uri) do
+      api_url = transform_playlist_uri(playlist_uri)
+      {:ok, response} = HTTPoison.post("#{api_url}?uris=#{track_uri}",
+                                       "",
+                                       ["Authorization": "Bearer #{get_token}",
+                                        "Accept": "application/json"],
+                                       hackney: [pool: :tracklist])
+      Poison.decode!(response.body)["snapshot_id"]
+    end
+
+    def remove_track_from_playlist(playlist_uri, track_uri) do
+      api_url = transform_playlist_uri(playlist_uri)
+      {:ok, response} = HTTPoison.request(:delete,
+                                           api_url,
+                                           "{\"tracks\":[{\"uri\":\"#{track_uri}\"}]}",
+                                           ["Authorization": "Bearer #{get_token}", "Content-Type": "application/json"],
+                                           hackney: [pool: :tracklist])
+      Poison.decode!(response.body)["snapshot_id"]
+    end
+
+    def transform_playlist_uri(uri) do
+      playlist_tokens = Regex.named_captures(~r/^spotify:user:(?<user>.*):playlist:(?<playlist>.*)$/, uri)
+      user = playlist_tokens["user"]
+      playlist = playlist_tokens["playlist"]
+      "https://api.spotify.com/v1/users/#{user}/playlists/#{playlist}/tracks"
+    end
+
+    def get_secrets do
+      "#{Application.get_env(:hedwig_mopidy, :spotify_client_id)}:#{Application.get_env(:hedwig_mopidy, :spotify_client_secret)}"
+    end
+
+    def get_refresh_token do
+      "#{Application.get_env(:hedwig_mopidy, :spotify_refresh_token)}"
+    end
+  end
 end
