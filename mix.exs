@@ -6,9 +6,9 @@ defmodule HedwigMopidy.Mixfile do
       app: :hedwig_mopidy,
       version: "0.0.2",
       elixir: ">= 1.3.1",
-      deps: deps,
-      description: description,
-      package: package,
+      deps: deps(),
+      description: description(),
+      package: package(),
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
       docs: [main: HedwigMopidy]
@@ -29,9 +29,10 @@ defmodule HedwigMopidy.Mixfile do
 
   defp deps do
     [
-      {:hedwig, "~> 1.0.0-rc.4"},
+      {:hedwig, "~> 1.0"},
       {:mopidy, github: "labzero/mopidy"},
-      {:httpoison, "~> 0.10.0"}
+      {:httpoison, "~> 1.0"},
+      {:hedwig_brain, github: "labzero/hedwig_brain"}
     ]
   end
 

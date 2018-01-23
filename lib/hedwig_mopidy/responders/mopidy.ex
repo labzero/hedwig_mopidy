@@ -10,54 +10,51 @@ defmodule HedwigMopidy.Responders.Mopidy do
   end
 
   defmodule ThumbStore do
-    defp brain do
-      HedwigBrain.brain
-    end
 
     defp storage do
-      brain.get_lobe("thumbs")
+      HedwigBrain.brain.get_lobe("thumbs")
     end
 
     def store(%Thumb{} = data, name) do
-      brain.put(storage, name, data)
+      HedwigBrain.brain.put(storage(), name, data)
       data
     end
 
     def retrieve(name) do
-      case brain.get(storage, canonicalize(name)) do
+      case HedwigBrain.brain.get(storage(), canonicalize(name)) do
         nil -> %Thumb{}
         data -> data
       end
     end
 
     def all do
-      brain.all(storage)
+      HedwigBrain.brain.all(storage())
     end
 
     def increment(name) do
       name = canonicalize(name)
-      count = case brain.get(storage, name) do
+      count = case HedwigBrain.brain.get(storage(), name) do
         nil -> 0
         data -> data
       end
       count = count + 1
-      brain.put(storage, name, count)
+      HedwigBrain.brain.put(storage(), name, count)
       count
     end
 
     def decrement(name) do
       name = canonicalize(name)
-      count = case brain.get(storage, name) do
+      count = case HedwigBrain.brain.get(storage(), name) do
         nil -> 0
         data -> data
       end
       count = count - 1
-      brain.put(storage, name, count)
+      HedwigBrain.brain.put(storage(), name, count)
       count
     end
 
     def count(name) do
-      case brain.get(storage, canonicalize(name)) do
+      case HedwigBrain.brain.get(storage(), canonicalize(name)) do
         nil -> 0
         data -> data
       end
@@ -71,47 +68,42 @@ defmodule HedwigMopidy.Responders.Mopidy do
   end
 
   defmodule CurrentPlaylistStore do
-    defp brain do
-      HedwigBrain.brain
-    end
-
     defp storage do
-      brain.get_lobe("playlist")
+      HedwigBrain.brain.get_lobe("playlist")
     end
 
     def store(%Playlist{} = playlist) do
-      brain.put(storage, "current_playlist", playlist)
+      HedwigBrain.brain.put(storage(), "current_playlist", playlist)
       playlist
     end
 
     def retrieve do
-      case brain.get(storage, "current_playlist") do
+      case HedwigBrain.brain.get(storage(), "current_playlist") do
         {:ok, playlist} -> playlist
         playlist -> playlist
       end
     end
 
     def all do
-      brain.all(storage)
+      HedwigBrain.brain.all(storage())
     end
   end
 
   @usage """
-
-`dj playlists` lists all the available playlists
-`dj start` shuffles the last-played playlist, or Lab Zero default playlist
-`dj start <uri>` shuffles a publicly-available playlist
-`dj pause|stop` ceases playback
-`dj play|resume` starts playback
-`dj ?` or `who's playing` or `what's playing`, shows current track and playlist
-`dj who's next` or `what's next`, shows upcoming track and playlist
-`dj +1|up|yes` upvotes the currently playing track
-`dj -1|down|no|gong` downvotes the currently playing track and skips to the next
-`dj skip|next` skips to the next track without the fanfare
-`dj volume` replies with the current volume level (0-10)
-`dj volume up|more|moar|+|++|+1` increases the volume by 1 level
-`dj volume down|less|-|--|-1` decreases the volume by 1 level
-`dj crank it` increases the volume by 3 levels
+  `dj playlists` lists all the available playlists
+  `dj start` shuffles the last-played playlist, or Lab Zero default playlist
+  `dj start <uri>` shuffles a publicly-available playlist
+  `dj pause|stop` ceases playback
+  `dj play|resume` starts playback
+  `dj ?` or `who's playing` or `what's playing`, shows current track and playlist
+  `dj who's next` or `what's next`, shows upcoming track and playlist
+  `dj +1|up|yes` upvotes the currently playing track
+  `dj -1|down|no|gong` downvotes the currently playing track and skips to the next
+  `dj skip|next` skips to the next track without the fanfare
+  `dj volume` replies with the current volume level (0-10)
+  `dj volume up|more|moar|+|++|+1` increases the volume by 1 level
+  `dj volume down|less|-|--|-1` decreases the volume by 1 level
+  `dj crank it` increases the volume by 3 levels
   """
 
   hear ~r/^dj\splaylists$/i, message do
@@ -123,7 +115,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
   end
 
   hear ~r/^dj\sstart(?:\s\<(?<playlist>.*)\>\s*)?/i, message do
-    arg = String.strip(message.matches["playlist"])
+    arg = String.trim(message.matches["playlist"])
 
     playlist = case arg do
       "" -> last_playlist()
@@ -206,8 +198,8 @@ defmodule HedwigMopidy.Responders.Mopidy do
       with {:ok, "playing"} <- Playback.get_state do
         user = HedwigMopidy.user(message)
         if ThumbStore.increment("#{currently_playing.uri}|#{current_playlist.uri}") > 2 do
-          HedwigMopidy.Spotify.remove_track_from_playlist(HedwigMopidy.favorites_playlist, currently_playing.uri)
-          HedwigMopidy.Spotify.add_track_to_playlist(HedwigMopidy.favorites_playlist, currently_playing.uri)
+          Spotify.remove_track_from_playlist(HedwigMopidy.favorites_playlist, currently_playing.uri)
+          Spotify.add_track_to_playlist(HedwigMopidy.favorites_playlist, currently_playing.uri)
         end
         ThumbStore.store(%Thumb{user: user,
                                 track: currently_playing,
@@ -226,11 +218,11 @@ defmodule HedwigMopidy.Responders.Mopidy do
     currently_playing = HedwigMopidy.currently_playing
     current_playlist = CurrentPlaylistStore.retrieve
     response =
-      with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
+      with {:ok, %TlTrack{}} <- Tracklist.next_track,
            {:ok, :success} <- Playback.next do
         user = HedwigMopidy.user(message)
         if ThumbStore.decrement("#{currently_playing.uri}|#{current_playlist.uri}") < -2 do
-          HedwigMopidy.Spotify.remove_track_from_playlist(current_playlist.uri, currently_playing.uri)
+          Spotify.remove_track_from_playlist(current_playlist.uri, currently_playing.uri)
         end
         ThumbStore.store(%Thumb{user: user,
                                 track: currently_playing,
@@ -247,7 +239,6 @@ defmodule HedwigMopidy.Responders.Mopidy do
   end
 
   hear ~r/^dj\s(skip|next)$/i, message do
-    currently_playing = HedwigMopidy.currently_playing
     current_playlist = CurrentPlaylistStore.retrieve
     response =
       with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
@@ -357,7 +348,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     {:ok, tracks}
   end
 
-  def terminate(reason, state) do
+  def terminate(_reason, _state) do
     #no-op
   end
 end
