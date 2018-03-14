@@ -1,7 +1,7 @@
 defmodule HedwigMopidy do
   use Application
 
-  alias Mopidy.{Track,TlTrack,Playback,Playlists,Playlist}
+  alias Mopidy.{Track,TlTrack,Playback,Playlist}
 
   def start(_type, _args) do
     import Supervisor.Spec, warn: false
@@ -88,6 +88,8 @@ defmodule HedwigMopidy do
       {:ok, response} = HTTPoison.post("https://accounts.spotify.com/api/token",
                                        "grant_type=refresh_token&refresh_token=#{get_refresh_token}",
                                        ["Authorization": "Basic #{:base64.encode(get_secrets)}",
+                                       "grant_type=refresh_token&refresh_token=#{get_refresh_token()}",
+                                       ["Authorization": "Basic #{:base64.encode(get_secrets())}",
                                         "Content-Type": "application/x-www-form-urlencoded"],
                                        hackney: [pool: :tracklist])
       Poison.decode!(response.body)["access_token"]
@@ -98,6 +100,7 @@ defmodule HedwigMopidy do
       {:ok, response} = HTTPoison.post("#{api_url}?uris=#{track_uri}",
                                        "",
                                        ["Authorization": "Bearer #{get_token}",
+                                       ["Authorization": "Bearer #{get_token()}",
                                         "Accept": "application/json"],
                                        hackney: [pool: :tracklist])
       Poison.decode!(response.body)["snapshot_id"]
@@ -109,6 +112,7 @@ defmodule HedwigMopidy do
                                            api_url,
                                            "{\"tracks\":[{\"uri\":\"#{track_uri}\"}]}",
                                            ["Authorization": "Bearer #{get_token}", "Content-Type": "application/json"],
+                                           ["Authorization": "Bearer #{get_token()}", "Content-Type": "application/json"],
                                            hackney: [pool: :tracklist])
       Poison.decode!(response.body)["snapshot_id"]
     end

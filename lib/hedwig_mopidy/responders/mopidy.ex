@@ -16,7 +16,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     end
 
     def store(%Thumb{} = data, name) do
-      HedwigBrain.brain.put(storage(), name, data)
+      HedwigBrain.brain.put(storage(), canonicalize(name), data)
       data
     end
 
@@ -62,7 +62,6 @@ defmodule HedwigMopidy.Responders.Mopidy do
 
     def canonicalize(string) do
       string
-      |> String.downcase
       |> String.trim
     end
   end
