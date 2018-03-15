@@ -84,6 +84,16 @@ defmodule HedwigMopidy do
   end
 
   defmodule Spotify do
+
+    def get_authorization_code(code) do
+      {:ok, response} = HTTPoison.post("https://accounts.spotify.com/api/token",
+                                       "grant_type=authorization_code&code=#{code}",
+                                       ["Authorization": "Basic #{:base64.encode(get_secrets())}",
+                                        "Content-Type": "application/x-www-form-urlencoded"],
+                                       hackney: [pool: :tracklist])
+      Poison.decode!(response.body)
+    end
+
     def get_token do
       {:ok, response} = HTTPoison.post("https://accounts.spotify.com/api/token",
                                        "grant_type=refresh_token&refresh_token=#{get_refresh_token()}",
@@ -100,7 +110,7 @@ defmodule HedwigMopidy do
                                        ["Authorization": "Bearer #{get_token()}",
                                         "Accept": "application/json"],
                                        hackney: [pool: :tracklist])
-      Poison.decode!(response.body)["snapshot_id"]
+      Poison.decode!(response.body)
     end
 
     def remove_track_from_playlist(playlist_uri, track_uri) do
@@ -110,7 +120,7 @@ defmodule HedwigMopidy do
                                            "{\"tracks\":[{\"uri\":\"#{track_uri}\"}]}",
                                            ["Authorization": "Bearer #{get_token()}", "Content-Type": "application/json"],
                                            hackney: [pool: :tracklist])
-      Poison.decode!(response.body)["snapshot_id"]
+      Poison.decode!(response.body)
     end
 
     def transform_playlist_uri(uri) do
