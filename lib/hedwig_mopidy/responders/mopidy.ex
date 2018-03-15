@@ -305,7 +305,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     response =
       with {:ok, %SearchResult{} = search_results} <- Library.search(%{artist: [artist]}),
            {:ok, :success} <- Tracklist.clear,
-           {:ok, tracks} when is_list(tracks) <- Tracklist.add(search_results.tracks |> Enum.map(fn(%Track{} = track) -> track.uri end)),
+           {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(search_results.tracks),
            {:ok, :success} <- Playback.play do
         HedwigMopidy.currently_playing
       else
@@ -327,7 +327,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     response =
       with {:ok, %SearchResult{} = search_results} <- Library.search(%{artist: [artist], album: [album]}),
            {:ok, :success} <- Tracklist.clear,
-           {:ok, tracks} when is_list(tracks) <- Tracklist.add(search_results.tracks |> Enum.map(fn(%Track{} = track) -> track.uri end)),
+           {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(search_results.tracks),
            {:ok, :success} <- Playback.play do
         HedwigMopidy.currently_playing
       else
