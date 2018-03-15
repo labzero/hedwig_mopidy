@@ -131,11 +131,17 @@ defmodule HedwigMopidy do
     end
 
     def get_secrets do
-      "#{Application.get_env(:hedwig_mopidy, :spotify_client_id)}:#{Application.get_env(:hedwig_mopidy, :spotify_client_secret)}"
+      client_id = System.get_env("SPOTIFY_CLIENT_ID")
+      client_secret = System.get_env("SPOTIFY_CLIENT_SECRET")
+      if client_id && client_secret do
+        "#{client_id}:#{client_secret}"
+      else
+        nil
+      end
     end
 
     def get_refresh_token do
-      "#{Application.get_env(:hedwig_mopidy, :spotify_refresh_token)}"
+      System.get_env("SPOTIFY_REFRESH_TOKEN")
     end
   end
 end
