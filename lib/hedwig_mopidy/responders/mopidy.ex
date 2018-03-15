@@ -222,6 +222,8 @@ defmodule HedwigMopidy.Responders.Mopidy do
         user = HedwigMopidy.user(message)
         if ThumbStore.decrement("#{currently_playing.uri}|#{current_playlist.uri}") < -2 do
           Spotify.remove_track_from_playlist(current_playlist.uri, currently_playing.uri)
+          Spotify.remove_track_from_playlist(HedwigMopidy.rejects_playlist, currently_playing.uri)
+          Spotify.add_track_to_playlist(HedwigMopidy.rejects_playlist, currently_playing.uri)          
         end
         ThumbStore.store(%Thumb{user: user,
                                 track: currently_playing,
@@ -242,7 +244,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     response =
       with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
            {:ok, :success} <- Playback.next do
-            HedwigMopidy.notice_message("Skipping to next track: #{HedwigMopidy.playing_string(next_track, current_playlist)}")
+            HedwigMopidy.notice_message("Skipping track (without downvoting): #{HedwigMopidy.playing_string(HedwigMopidy.currently_playing, current_playlist)}")
       else
         {:error, error_message} -> error_message
         _ -> HedwigMopidy.notice_message("No more songs are queued")
@@ -303,7 +305,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     response =
       with {:ok, %SearchResult{} = search_results} <- Library.search(%{artist: [artist]}),
            {:ok, :success} <- Tracklist.clear,
-           {:ok, tracks} when is_list(tracks) <- Tracklist.add(search_results.tracks |> Enum.map(fn(%Track{} = track) -> track.uri end)),
+           {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(search_results.tracks),
            {:ok, :success} <- Playback.play do
         HedwigMopidy.currently_playing
       else
@@ -325,7 +327,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     response =
       with {:ok, %SearchResult{} = search_results} <- Library.search(%{artist: [artist], album: [album]}),
            {:ok, :success} <- Tracklist.clear,
-           {:ok, tracks} when is_list(tracks) <- Tracklist.add(search_results.tracks |> Enum.map(fn(%Track{} = track) -> track.uri end)),
+           {:ok, tracks} when is_list(tracks) <- add_tracks_in_batches(search_results.tracks),
            {:ok, :success} <- Playback.play do
         HedwigMopidy.currently_playing
       else
