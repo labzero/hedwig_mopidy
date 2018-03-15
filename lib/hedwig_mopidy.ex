@@ -83,6 +83,10 @@ defmodule HedwigMopidy do
     Application.get_env(:hedwig_mopidy, :favorites_playlist) || "spotify:user:labzeroinnovations:playlist:00l7ibuNDlOGRvfReyaUge"
   end
 
+  def rejects_playlist do
+    Application.get_env(:hedwig_mopidy, :rejects_playlist) || "spotify:user:labzeroinnovations:playlist:5hJ09W4UOXj3gFndMi2egk"
+  end
+
   defmodule Spotify do
 
     def get_authorization_code(code) do

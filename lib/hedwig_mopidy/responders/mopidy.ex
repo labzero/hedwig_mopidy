@@ -222,6 +222,8 @@ defmodule HedwigMopidy.Responders.Mopidy do
         user = HedwigMopidy.user(message)
         if ThumbStore.decrement("#{currently_playing.uri}|#{current_playlist.uri}") < -2 do
           Spotify.remove_track_from_playlist(current_playlist.uri, currently_playing.uri)
+          Spotify.remove_track_from_playlist(HedwigMopidy.rejects_playlist, currently_playing.uri)
+          Spotify.add_track_to_playlist(HedwigMopidy.rejects_playlist, currently_playing.uri)          
         end
         ThumbStore.store(%Thumb{user: user,
                                 track: currently_playing,
