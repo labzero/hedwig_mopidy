@@ -242,7 +242,7 @@ defmodule HedwigMopidy.Responders.Mopidy do
     response =
       with {:ok, %TlTrack{} = next_track} <- Tracklist.next_track,
            {:ok, :success} <- Playback.next do
-            HedwigMopidy.notice_message("Skipping to next track: #{HedwigMopidy.playing_string(next_track, current_playlist)}")
+            HedwigMopidy.notice_message("Skipping track (without downvoting): #{HedwigMopidy.playing_string(HedwigMopidy.currently_playing, current_playlist)}")
       else
         {:error, error_message} -> error_message
         _ -> HedwigMopidy.notice_message("No more songs are queued")
