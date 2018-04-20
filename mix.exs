@@ -21,7 +21,9 @@ defmodule HedwigMopidy.Mixfile do
         :hedwig,
         :logger,
         :mopidy,
-        :httpoison
+        :httpoison,
+        :cowboy,
+        :plug
       ],
       mod: {HedwigMopidy, []}
     ]
@@ -32,7 +34,9 @@ defmodule HedwigMopidy.Mixfile do
       {:hedwig, "~> 1.0"},
       {:mopidy, github: "labzero/mopidy"},
       {:httpoison, "~> 1.0"},
-      {:hedwig_brain, github: "labzero/hedwig_brain"}
+      {:hedwig_brain, github: "labzero/hedwig_brain"},
+      {:cowboy, "~> 1.0"},
+      {:plug, "~> 1.5.0"}
     ]
   end
 
