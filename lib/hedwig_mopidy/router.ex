@@ -35,10 +35,10 @@ defmodule HedwigMopidy.Router do
     cond do
       Enum.member?([1, "up", "yes"], direction) ->
         send_resp(conn, 200, HedwigMopidy.upvote(user))
-      Enum.member?([-1, "down", "no"], direction) ->
+      Enum.member?([-1, "down", "no", "gong"], direction) ->
         send_resp(conn, 200, HedwigMopidy.downvote(user))
       true ->
-        send_resp(conn, 500, "Direction #{direction} is not supported. Support values are: up/down, 1/-1, yes/no")
+        send_resp(conn, 500, "Direction #{direction} is not supported. Supported values are: up/down, 1/-1, yes/no, and gong")
     end
   end
 
